@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>꾹꾹 스텝</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- 인게임 HUD -->
+  <div id="hud" class="hidden">
+    <button id="btn-pause" class="icon-btn" aria-label="일시정지">❚❚</button>
+    <div id="lives" aria-label="남은 목숨"></div>
+    <div id="combo"><span id="combo-num">0</span><small>COMBO</small></div>
+    <div id="acc">100.0%</div>
+    <div id="level-name"></div>
+    <div id="progress"><div id="progress-fill"></div></div>
+  </div>
+
+  <!-- 타이틀 -->
+  <section id="screen-title" class="screen active">
+    <div class="title-wrap">
+      <div class="logo">
+        <span class="logo-paw">🐾</span>
+        <h1>꾹꾹 스텝</h1>
+        <p class="logo-sub">Paw Paw Step · 고양이 리듬 산책</p>
+      </div>
+      <div class="menu">
+        <button class="btn primary" data-go="select">시작하기</button>
+        <button class="btn" data-go="settings">설정</button>
+      </div>
+      <p class="hint">고양이가 발판에 <b>착지하는 순간</b> 꾹! 눌러주세요<br/>
+        <kbd>Space</kbd> · 아무 키 · 화면 터치</p>
+    </div>
+  </section>
+
+  <!-- 레벨 선택 -->
+  <section id="screen-select" class="screen">
+    <div class="panel wide">
+      <h2>어디로 산책 갈까?</h2>
+      <div class="skin-row">
+        <span class="label">오늘의 고양이</span>
+        <div id="skins"></div>
+      </div>
+      <div id="levels" class="level-grid"></div>
+      <button class="btn small ghost" data-go="title">← 돌아가기</button>
+    </div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="screen-settings" class="screen">
+    <div class="panel">
+      <h2>설정</h2>
+      <label class="field">
+        <span>볼륨 <em id="vol-val"></em></span>
+        <input id="opt-volume" type="range" min="0" max="100" step="1" />
+      </label>
+      <label class="field">
+        <span>싱크 보정 <em id="off-val"></em></span>
+        <input id="opt-offset" type="range" min="-200" max="200" step="5" />
+        <small>판정이 자꾸 "느려요"라면 +, "빨라요"라면 − 쪽으로</small>
+      </label>
+      <label class="field row">
+        <span>구경 모드 (자동 플레이)</span>
+        <input id="opt-auto" type="checkbox" />
+      </label>
+      <button class="btn small ghost" data-go="title">← 돌아가기</button>
+    </div>
+  </section>
+
+  <!-- 일시정지 -->
+  <section id="screen-pause" class="screen">
+    <div class="panel">
+      <h2>잠깐 쉬는 중…</h2>
+      <div class="menu">
+        <button class="btn primary" id="btn-resume">계속하기</button>
+        <button class="btn" id="btn-retry-p">처음부터</button>
+        <button class="btn ghost" id="btn-quit">나가기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결과 -->
+  <section id="screen-result" class="screen">
+    <div class="panel">
+      <p id="res-title" class="res-title"></p>
+      <div id="res-rank" class="rank">S</div>
+      <div id="res-badges" class="badges"></div>
+      <div class="res-acc"><span id="res-acc">100%</span><small>정확도</small></div>
+      <ul class="res-counts">
+        <li class="c-perfect"><b id="res-perfect">0</b><span>Purrfect</span></li>
+        <li class="c-great"><b id="res-great">0</b><span>Nice</span></li>
+        <li class="c-good"><b id="res-good">0</b><span>Good</span></li>
+        <li class="c-miss"><b id="res-miss">0</b><span>Miss</span></li>
+      </ul>
+      <p class="res-combo">최대 콤보 <b id="res-combo">0</b></p>
+      <div class="menu row">
+        <button class="btn primary" id="btn-retry">다시하기</button>
+        <button class="btn" id="btn-back">레벨 선택</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/levels.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

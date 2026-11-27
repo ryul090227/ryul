@@ -236,3 +236,51 @@ input[type='checkbox'] { width: 22px; height: 22px; accent-color: var(--pink); }
   .btn { min-width: 150px; font-size: 18px; }
   .menu.row .btn { min-width: 120px; padding: 12px 20px; }
 }
+
+/* ---------- v2: 플레이 방법 ---------- */
+.howto { text-align: left; padding-left: 22px; margin: 0 0 16px; line-height: 1.6; font-size: 16px; }
+.howto li { margin-bottom: 8px; }
+.howto b { color: var(--pink-deep); font-weight: 400; }
+.angle-table { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+.angle-table div { background: #fff; border-radius: 14px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; text-align: left; }
+.angle-table .ang { width: 28px; text-align: center; color: var(--ink-soft); font-size: 16px; }
+.angle-table b { margin-left: auto; color: var(--pink-deep); font-weight: 400; }
+.tip { color: var(--ink-soft); font-size: 14px; margin: 4px 0 0; }
+
+/* ---------- v2: 레벨 선택 ---------- */
+.level-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.level-card { padding-top: 38px; border: 3px solid transparent; }
+.level-card.sel { border-color: #fff; box-shadow: 0 0 0 3px var(--pink), 0 10px 22px rgba(120, 60, 100, 0.25); transform: translateY(-3px); }
+.level-card .tier {
+  position: absolute; top: 12px; left: 14px;
+  font-size: 13px; color: #fff; border-radius: 999px; padding: 2px 10px;
+}
+.level-card .lv-name { font-size: 20px; }
+.level-card .lv-best { width: 32px; height: 32px; top: 8px; right: 8px; font-size: 17px; }
+.detail {
+  margin: 16px 0 0; min-height: 52px; background: rgba(255, 255, 255, 0.75); border-radius: 18px;
+  padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center; align-items: center;
+  font-size: 15px; color: var(--ink-soft);
+}
+.detail b { color: var(--ink); font-weight: 400; }
+.detail .now { color: var(--pink-deep); }
+#screen-select .menu.row { margin-top: 14px; }
+#btn-play { min-width: 200px; }
+
+.title-wrap { margin-top: -22vh; }
+.menu .btn.ghost { min-width: 0; }
+
+@media (max-width: 520px) {
+  .panel { padding: 20px 14px; }
+  .panel h2 { font-size: 22px; margin-bottom: 12px; }
+  .skin-row { margin-bottom: 12px; }
+  .skin-row .label { display: none; }
+  .skin canvas { width: 50px; height: 50px; }
+  .level-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .level-card { padding: 34px 12px 12px; }
+  .level-card .lv-name { font-size: 17px; }
+  .level-card .lv-sub { display: none; }
+  .level-card .lv-meta { font-size: 12px; margin-top: 8px; }
+  .detail { font-size: 13px; gap: 4px 12px; padding: 8px 10px; }
+  .angle-table { grid-template-columns: 1fr; }
+}

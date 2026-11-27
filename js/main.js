@@ -12,42 +12,60 @@ const store = {
 
 const params = new URLSearchParams(location.search);
 const settings = {
-  volume: store.get('volume', 80),
+  musicVol: store.get('musicVol', 80),
+  sfxVol: store.get('sfxVol', 70),
   offset: store.get('offset', 0),
   auto: params.has('auto') || store.get('auto', false),
   skin: store.get('skin', 'cheese'),
 };
-const best = store.get('best', {});
+const best = store.get('best2', {});
 
 const $ = (id) => document.getElementById(id);
 const audio = new AudioEngine();
-audio.setVolume(settings.volume / 100);
+audio.setMusicVolume(settings.musicVol / 100);
+audio.setSfxVolume(settings.sfxVol / 100);
 const renderer = new Renderer($('game'));
 renderer.skin = SKINS.find((s) => s.id === settings.skin) || SKINS[0];
 
-let session = null;   // 실제 플레이 세션
-let demo = null;      // 메뉴 배경용 자동 산책
-let currentLevel = null;
+const chartInfo = {};
+for (const lv of LEVELS) {
+  const c = buildChart(lv);
+  chartInfo[lv.id] = { notes: c.tiles.length - 1, length: c.endTime };
+}
+
+let session = null;   // 실제 플레이
+let demo = null;      // 메뉴 배경 (자동 플레이)
+let selected = LEVELS[0];
 let screen = 'title';
 
 /* ---------- 화면 전환 ---------- */
 function show(name) {
+  const prev = screen;
   screen = name;
   document.querySelectorAll('.screen').forEach((el) => el.classList.toggle('active', el.id === 'screen-' + name));
-  if (name === 'select') buildSelect();
+  if (name === 'select') {
+    buildSelect();
+    if (prev !== 'select') startDemo(selected, true);
+  } else if (prev === 'select' && !session) {
+    startDemo(selected, false);
+  }
+  renderer.yShift = name === 'title' ? renderer.h * 0.3 : name === 'select' ? renderer.h * 0.36 : 0;
 }
 
 document.querySelectorAll('[data-go]').forEach((b) =>
   b.addEventListener('click', () => { audio.ensure(); audio.uiBlip(); show(b.dataset.go); }));
 
-/* ---------- 데모 (메뉴 배경) ---------- */
-function startDemo(level = LEVELS[0]) {
-  demo = new Session(level, { demo: true, auto: true });
+/* ---------- 데모 (메뉴 배경 + 미리듣기) ---------- */
+function startDemo(level, withMusic) {
+  if (demo) demo.stop();
+  demo = new Session(level, { demo: true, auto: true, audio: withMusic && audio.ctx ? audio : null });
   demo.start();
   renderer.attach(demo);
 }
 
-/* ---------- 레벨 선택 화면 ---------- */
+/* ---------- 레벨 선택 ---------- */
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
 function buildSelect() {
   const skinsEl = $('skins');
   skinsEl.innerHTML = '';
@@ -70,33 +88,50 @@ function buildSelect() {
   const grid = $('levels');
   grid.innerHTML = '';
   for (const lv of LEVELS) {
+    const tier = TIERS[lv.tier];
     const card = document.createElement('button');
-    card.className = 'level-card';
+    card.className = 'level-card' + (lv === selected ? ' sel' : '');
     card.style.setProperty('--c-top', lv.theme.bgTop);
     card.style.setProperty('--c-bottom', lv.theme.bgBottom);
     card.style.setProperty('--c-text', lv.theme.text);
     const rec = best[lv.id];
-    const notes = buildChart(lv).tiles.length - 1;
     card.innerHTML = `
+      <span class="tier" style="background:${tier.color}">${tier.name}</span>
       <span class="lv-best ${rec ? '' : 'none'}">${rec ? rec.rank : '—'}</span>
-      <span class="lv-name">${lv.name}</span>
+      <span class="lv-name">${lv.song.title}</span>
       <span class="lv-sub">${lv.sub}</span>
-      <span class="lv-meta"><span>${'🐾'.repeat(lv.difficulty)}</span><span>BPM ${lv.bpm} · ${notes}칸</span></span>
-      ${rec ? `<span class="lv-meta" style="margin-top:6px"><span>최고 기록</span><span>${(rec.acc * 100).toFixed(1)}%</span></span>` : ''}`;
-    card.onmouseenter = () => { if (demo && demo.level !== lv) startDemo(lv); };
-    card.onclick = () => startLevel(lv);
+      <span class="lv-meta"><span>${'🐾'.repeat(tier.paws)}</span><span>BPM ${lv.song.bpm}</span></span>`;
+    card.onclick = () => {
+      if (selected === lv) { startLevel(lv); return; }
+      selected = lv;
+      audio.ensure();
+      startDemo(lv, true);
+      buildSelect();
+    };
     grid.append(card);
   }
+
+  const info = chartInfo[selected.id];
+  const rec = best[selected.id];
+  $('detail').innerHTML = `
+    <span class="now">♪ ${selected.song.title}</span>
+    <span>난이도 <b style="color:${TIERS[selected.tier].color}">${TIERS[selected.tier].name}</b></span>
+    <span>길이 <b>${fmtTime(info.length)}</b></span>
+    <span>발판 <b>${info.notes}칸</b></span>
+    <span>목숨 <b>${'♥'.repeat(selected.lives)}</b></span>
+    ${rec ? `<span>최고 <b>${(rec.acc * 100).toFixed(1)}%</b></span>` : ''}`;
 }
+$('btn-play').onclick = () => startLevel(selected);
 
 /* ---------- 플레이 ---------- */
 function startLevel(level) {
   audio.ensure();
+  if (demo) { demo.stop(); demo = null; }
   if (session) session.stop();
-  currentLevel = level;
+  selected = level;
   session = new Session(level, {
     audio, auto: settings.auto, offsetMs: settings.offset,
-    onEnd: (r) => setTimeout(() => showResult(r), r.cleared ? 900 : 700),
+    onEnd: (r) => setTimeout(() => showResult(r), r.cleared ? 1600 : 1200),
   });
   renderer.attach(session);
   buildHUD();
@@ -105,23 +140,24 @@ function startLevel(level) {
   $('hud').classList.remove('hidden');
 }
 
-function quitToMenu(to = 'select') {
+function quitToMenu() {
   if (session) { session.stop(); session = null; }
   $('hud').classList.add('hidden');
-  startDemo(currentLevel || LEVELS[0]);
-  show(to);
+  screen = 'none';
+  show('select');
 }
 
 function buildHUD() {
   const lives = $('lives');
   lives.innerHTML = '';
-  for (let i = 0; i < MAX_LIVES; i++) {
+  for (let i = 0; i < session.maxLives; i++) {
     const h = document.createElement('span');
     h.className = 'h'; h.textContent = '♥';
     lives.append(h);
   }
-  $('level-name').textContent = `${currentLevel.name}${settings.auto ? ' · 구경 모드' : ''}`;
-  $('hud').classList.toggle('night', !!currentLevel.theme.night);
+  const tier = TIERS[selected.tier];
+  $('level-name').textContent = `${tier.name} · ${selected.song.title}${settings.auto ? ' · 구경 모드' : ''}`;
+  $('hud').classList.toggle('night', !!selected.theme.night);
   hudCache = {};
 }
 
@@ -150,7 +186,9 @@ function updateHUD() {
 
 function showResult(r) {
   if (!session || screen === 'result') return;
-  $('res-title').textContent = r.cleared ? `${currentLevel.name} 산책 완료!` : '아홉 목숨을 다 썼어요…';
+  $('res-title').textContent = r.cleared
+    ? `${selected.song.title} 완주!`
+    : `목숨을 다 썼어요… (${Math.round(r.progress * 100)}% 지점)`;
   const rank = $('res-rank');
   rank.textContent = r.rank;
   rank.className = 'rank ' + r.rank;
@@ -162,10 +200,10 @@ function showResult(r) {
   if (r.allPerfect) badges.push('<span class="badge gold">ALL PURRFECT</span>');
   else if (r.fullCombo) badges.push('<span class="badge">FULL COMBO</span>');
   if (r.cleared && !settings.auto) {
-    const prev = best[currentLevel.id];
+    const prev = best[selected.id];
     if (!prev || r.accuracy > prev.acc) {
-      best[currentLevel.id] = { acc: r.accuracy, rank: r.rank, fc: r.fullCombo };
-      store.set('best', best);
+      best[selected.id] = { acc: r.accuracy, rank: r.rank, fc: r.fullCombo };
+      store.set('best2', best);
       badges.push('<span class="badge gold">NEW BEST</span>');
     }
   }
@@ -175,7 +213,7 @@ function showResult(r) {
 
 /* ---------- 일시정지 ---------- */
 function pauseGame() {
-  if (!session || session.ended || session.paused) return;
+  if (!session || session.ended || session.paused || screen !== 'none') return;
   session.pause();
   show('pause');
 }
@@ -186,10 +224,10 @@ function resumeGame() {
 }
 $('btn-pause').onclick = pauseGame;
 $('btn-resume').onclick = resumeGame;
-$('btn-retry-p').onclick = () => startLevel(currentLevel);
-$('btn-retry').onclick = () => startLevel(currentLevel);
-$('btn-quit').onclick = () => quitToMenu('select');
-$('btn-back').onclick = () => quitToMenu('select');
+$('btn-retry-p').onclick = () => startLevel(selected);
+$('btn-retry').onclick = () => startLevel(selected);
+$('btn-quit').onclick = quitToMenu;
+$('btn-back').onclick = quitToMenu;
 window.addEventListener('blur', pauseGame);
 
 /* ---------- 입력 ---------- */
@@ -205,12 +243,10 @@ window.addEventListener('keydown', (e) => {
   if (playing()) {
     e.preventDefault();
     session.press();
-  } else if (screen === 'title' && (e.key === ' ' || e.key === 'Enter')) {
+  } else if ((e.key === ' ' || e.key === 'Enter') && !e.target.closest?.('button')) {
     e.preventDefault();
-    audio.ensure(); show('select');
-  } else if (screen === 'result' && (e.key === ' ' || e.key === 'Enter')) {
-    e.preventDefault();
-    startLevel(currentLevel);
+    if (screen === 'title') { audio.ensure(); show('select'); }
+    else if (screen === 'select' || screen === 'result') startLevel(selected);
   }
 });
 
@@ -218,18 +254,21 @@ $('game').addEventListener('pointerdown', (e) => {
   if (playing()) { e.preventDefault(); session.press(); }
 });
 
-/* ---------- 설정 화면 ---------- */
+/* ---------- 설정 ---------- */
 function bindSettings() {
-  const vol = $('opt-volume'), off = $('opt-offset'), auto = $('opt-auto');
-  vol.value = settings.volume;
+  const mv = $('opt-mvol'), sv = $('opt-svol'), off = $('opt-offset'), auto = $('opt-auto');
+  mv.value = settings.musicVol;
+  sv.value = settings.sfxVol;
   off.value = settings.offset;
   auto.checked = settings.auto;
   const label = () => {
-    $('vol-val').textContent = settings.volume + '%';
+    $('mvol-val').textContent = settings.musicVol + '%';
+    $('svol-val').textContent = settings.sfxVol + '%';
     $('off-val').textContent = (settings.offset > 0 ? '+' : '') + settings.offset + 'ms';
   };
   label();
-  vol.oninput = () => { settings.volume = +vol.value; audio.setVolume(settings.volume / 100); store.set('volume', settings.volume); label(); };
+  mv.oninput = () => { settings.musicVol = +mv.value; audio.setMusicVolume(settings.musicVol / 100); store.set('musicVol', settings.musicVol); label(); };
+  sv.oninput = () => { settings.sfxVol = +sv.value; audio.setSfxVolume(settings.sfxVol / 100); store.set('sfxVol', settings.sfxVol); label(); };
   off.oninput = () => { settings.offset = +off.value; store.set('offset', settings.offset); label(); };
   auto.onchange = () => { settings.auto = auto.checked; store.set('auto', settings.auto); };
 }
@@ -243,15 +282,16 @@ function frame(now) {
   const s = session || demo;
   if (s) {
     s.update();
-    if (s === demo && demo.ended) startDemo(demo.level);
+    if (s === demo && demo.ended && demo.t() > demo.chart.endTime + 2) startDemo(demo.level, !!demo.audio);
     renderer.draw(dt);
   }
   updateHUD();
   requestAnimationFrame(frame);
 }
 
-startDemo();
+startDemo(LEVELS[0], false);
+renderer.yShift = renderer.h * 0.3;
 requestAnimationFrame(frame);
 
 // 디버그용
-window.__game = { get session() { return session; }, startLevel, LEVELS };
+window.__game = { get session() { return session; }, get demo() { return demo; }, startLevel, LEVELS, audio };

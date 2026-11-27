@@ -3,7 +3,7 @@
  * ========================================================= */
 
 const GAP = 84;  // 칸 사이 거리 (월드 px)
-const TS = 48;   // 발판 크기
+const TS = 46;   // 발판 크기
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -110,6 +110,18 @@ function drawCat(ctx, skin, o) {
     ctx.stroke();
   }
 
+  drawCatHead(ctx, skin, o.mood, t);
+  ctx.restore();
+}
+
+
+/* 고양이 머리 (원래 좌표계 기준, 머리 중심 = (3,-35)) */
+function drawCatHead(ctx, skin, mood, t) {
+  const o = { mood };
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = skin.line;
+  ctx.lineWidth = 2.4;
   // 귀
   const ew = Math.sin(t * 7) * (o.mood === 'happy' ? 1.5 : 0.4);
   const ears = [
@@ -214,7 +226,133 @@ function drawCat(ctx, skin, o) {
     ctx.beginPath(); ctx.moveTo(x1, -30); ctx.lineTo(x2, -30 + dy * 2); ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+
+/* ---------------------------------------------------------
+ * 쭈욱 늘어나는 고양이
+ *   B = 엉덩이 끝, H = 머리 끝 (월드 좌표)
+ *   bend = 몸통 휘어짐 (회전 반대쪽으로 살짝 끌려오는 느낌)
+ * --------------------------------------------------------- */
+function drawStretchCat(ctx, skin, o) {
+  const { B, H, t } = o;
+  const dx = H.x - B.x, dy = H.y - B.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  const mx = (B.x + H.x) / 2 + nx * o.bend, my = (B.y + H.y) / 2 + ny * o.bend;
+  const N = 18;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N, v = 1 - u;
+    pts.push({ x: v * v * B.x + 2 * v * u * mx + u * u * H.x, y: v * v * B.y + 2 * v * u * my + u * u * H.y });
+  }
+  const poly = (from, to) => {
+    ctx.beginPath();
+    const a = Math.round(from * N), b = Math.round(to * N);
+    for (let i = a; i <= b; i++) i === a ? ctx.moveTo(pts[i].x, pts[i].y) : ctx.lineTo(pts[i].x, pts[i].y);
+  };
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // 그림자 (움직이는 끝)
+  const S = o.swingIsHead ? H : B;
+  ctx.fillStyle = 'rgba(40,20,40,0.13)';
+  ctx.beginPath(); ctx.ellipse(S.x, S.y + 16, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // 꼬리 방향: 엉덩이에서 몸통 반대쪽
+  let tx = B.x - pts[3].x, ty = B.y - pts[3].y;
+  const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+  const wag = Math.sin(t * 7) * 8;
+  const tail = () => {
+    ctx.beginPath();
+    ctx.moveTo(B.x + tx * 6, B.y + ty * 6);
+    ctx.quadraticCurveTo(B.x + tx * 24 - ty * wag, B.y + ty * 24 + tx * wag - 6, B.x + tx * 26 + ty * wag * 0.6, B.y + ty * 26 - 18);
+  };
+
+  // 1) 외곽선
+  ctx.strokeStyle = skin.line;
+  tail(); ctx.lineWidth = 10; ctx.stroke();
+  poly(0, 1); ctx.lineWidth = 25; ctx.stroke();
+  ctx.fillStyle = skin.line;
+  ctx.beginPath(); ctx.arc(B.x, B.y, 15, 0, Math.PI * 2); ctx.fill();
+
+  // 2) 채우기
+  ctx.strokeStyle = skin.body;
+  tail(); ctx.lineWidth = 6; ctx.stroke();
+  poly(0, 1); ctx.lineWidth = 20; ctx.stroke();
+  ctx.fillStyle = skin.body;
+  ctx.beginPath(); ctx.arc(B.x, B.y, 12.6, 0, Math.PI * 2); ctx.fill();
+
+  // 3) 무늬
+  if (skin.stretchPatches) {
+    for (const p of skin.stretchPatches) { ctx.strokeStyle = p.c; poly(p.from, p.to); ctx.lineWidth = 17; ctx.stroke(); }
+  }
+  if (skin.stripe && len > 30) {
+    ctx.strokeStyle = skin.stripe;
+    ctx.lineWidth = 3.4;
+    for (const f of [0.3, 0.45, 0.6, 0.75]) {
+      const i = Math.round(f * N);
+      const p = pts[i], q = pts[i + 1] || pts[i - 1];
+      let ux = q.x - p.x, uy = q.y - p.y; const ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
+      ctx.beginPath(); ctx.moveTo(p.x - uy * 7, p.y + ux * 7); ctx.lineTo(p.x + uy * 7, p.y - ux * 7); ctx.stroke();
+    }
+  }
+  // 배 (가운데 밝은 줄)
+  ctx.strokeStyle = skin.belly; ctx.globalAlpha = 0.55;
+  poly(0.25, 0.75); ctx.lineWidth = 6; ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // 4) 발 (엉덩이 쪽, 머리 쪽)
+  ctx.fillStyle = skin.belly; ctx.strokeStyle = skin.line; ctx.lineWidth = 2;
+  for (const P of [B, H]) {
+    for (const ox of [-7, 7]) {
+      ctx.beginPath(); ctx.ellipse(P.x + ox, P.y + 11, 5, 3.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
+
+  // 5) 머리 (항상 똑바로, 몸 방향을 바라봄)
+  ctx.save();
+  ctx.translate(H.x, H.y - 6);
+  ctx.scale(o.face || 1, 1);
+  ctx.translate(-3, 35);
+  drawCatHead(ctx, skin, o.mood, t);
   ctx.restore();
+}
+
+function drawSpiral(ctx, x, y, r, color, dir) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir < 0 ? -1 : 1, 1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i <= 40; i++) {
+    const a = (i / 40) * Math.PI * 3.2;
+    const rr = (i / 40) * r;
+    const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFish(ctx, x, y, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(-2, 0, 11, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(15, -7); ctx.lineTo(15, 7); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-7, -1.5, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function mixColor(a, b, k) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(lerp((pa >> 16) & 255, (pb >> 16) & 255, k));
+  const g = Math.round(lerp((pa >> 8) & 255, (pb >> 8) & 255, k));
+  const bl = Math.round(lerp(pa & 255, pb & 255, k));
+  return `rgb(${r},${g},${bl})`;
 }
 
 /* --------------------------------------------------------- */
@@ -236,9 +374,8 @@ class Renderer {
     }
     this.session = null;
     this.skin = SKINS[0];
-    this.face = 1;
-    this.poseIdx = 0;
     this.time = 0;
+    this.yShift = 0;
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -258,57 +395,33 @@ class Renderer {
     this.particles = [];
     this.popups = [];
     this.evPtr = 0;
-    this.poseIdx = 0;
-    this.face = 1;
     this.lastMissAt = -99;
     this.lastHappyAt = -99;
     this.cam.x = 0; this.cam.y = 0;
+    this.face = 1;
   }
 
-  /* 고양이 위치/자세 계산 — 시간만으로 결정되는 순수 함수 */
-  catPose(t) {
-    const tiles = this.session.chart.tiles;
-    const n = tiles.length;
-    let k = this.poseIdx;
-    while (k < n - 1 && tiles[k + 1].time <= t) k++;
-    while (k > 0 && tiles[k].time > t) k--;
-    this.poseIdx = k;
-    const cur = tiles[k];
-    const pose = { x: cur.x * GAP, y: cur.y * GAP, lift: 0, sx: 1, sy: 1, k, air: false };
+  /* 고양이 상태: 시간만으로 계산 */
+  catState(t) {
+    const s = this.session;
+    const tiles = s.chart.tiles;
+    const k = s.judged;
+    const piv = tiles[k];
+    const P = { x: piv.x * GAP, y: piv.y * GAP };
+    const beat = s.chart.beatAt(t);
+    const phi = ((piv.heading + 180 + piv.rot * DEG_PER_BEAT * (beat - piv.beat)) * Math.PI) / 180;
 
-    // 착지 직후 찌그러짐
-    const since = t - cur.time;
-    if (k > 0 && since >= 0 && since < 0.16) {
-      const q = 1 - since / 0.16;
-      pose.sy = 1 - 0.24 * q;
-      pose.sx = 1 + 0.2 * q;
+    // 몸 길이 (시작 전엔 웅크림 → 카운트 첫 박 동안 쭉 늘어남, 끝나면 다시 웅크림)
+    let L = 1;
+    const startBeat = -COUNT_IN;
+    if (beat < startBeat) L = 0;
+    else if (beat < startBeat + 1) L = easeInOut(beat - startBeat);
+    if (k === tiles.length - 1 || (s.ended && s.result && !s.result.cleared)) {
+      const since = t - (s.lastJudgeTime > -90 ? s.lastJudgeTime : t);
+      L = clamp(1 - since / 0.35, 0, 1);
     }
-    if (k >= n - 1) return pose;
-
-    const nx = tiles[k + 1];
-    const dx = nx.x - cur.x;
-    if (Math.abs(dx) > 0.01) this.face = Math.sign(dx);
-
-    const hd = Math.min(nx.stepDur * 0.82, 0.3);
-    const hs = nx.time - hd;
-    if (t >= hs) {
-      const p = clamp((t - hs) / hd, 0, 1);
-      const e = easeInOut(p);
-      pose.x = lerp(cur.x, nx.x, e) * GAP;
-      pose.y = lerp(cur.y, nx.y, e) * GAP;
-      pose.lift = Math.sin(Math.PI * p) * 34;
-      pose.sx = 0.9;
-      pose.sy = 1.12;
-      pose.air = true;
-    } else {
-      const pre = hs - t;
-      if (pre < 0.09) { // 점프 직전 웅크리기
-        const q = 1 - pre / 0.09;
-        pose.sy *= 1 - 0.14 * q;
-        pose.sx *= 1 + 0.1 * q;
-      }
-    }
-    return pose;
+    const S = { x: P.x + Math.cos(phi) * GAP * L, y: P.y - Math.sin(phi) * GAP * L };
+    return { P, S, L, k, phi, rot: piv.rot, pivotIsHead: k % 2 === 1 };
   }
 
   spawnBurst(x, y, color, count, kind) {
@@ -317,7 +430,7 @@ class Renderer {
       const sp = 90 + Math.random() * 120;
       this.particles.push({
         x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60,
-        life: 0, max: 0.6 + Math.random() * 0.3,
+        life: 0, max: 0.55 + Math.random() * 0.3,
         size: 5 + Math.random() * 5, color, kind,
         rot: Math.random() * 6, vr: (Math.random() - 0.5) * 8,
       });
@@ -333,23 +446,25 @@ class Renderer {
       const x = tile.x * GAP, y = tile.y * GAP;
       if (ev.type === 'hit') {
         const info = GRADE_INFO[ev.grade];
-        this.spawnBurst(x, y, info.color, ev.grade === 'perfect' ? 10 : 6, ev.grade === 'perfect' ? 'heart' : 'dot');
+        const pf = ev.grade === 'perfect';
+        this.spawnBurst(x, y, info.color, pf ? 8 : 5, pf ? 'heart' : 'dot');
         this.particles.push({ x, y, life: 0, max: 0.35, kind: 'ring', color: info.color });
-        if (!s.demo) {
-          const timing = ev.grade !== 'perfect' ? (ev.dt < 0 ? '빨라요' : '느려요') : '';
-          this.popups.push({ x, y: y - 40, text: info.label, sub: timing, color: info.color, life: 0, max: 0.7 });
+        if (!s.demo && (!pf || t - (this.lastPopAt || -9) > 0.28)) {
+          this.lastPopAt = t;
+          const timing = pf ? '' : ev.dt < 0 ? '빨라요' : '느려요';
+          this.popups.push({ x, y: y - 46, text: info.label, sub: timing, color: info.color, life: 0, max: 0.6 });
         }
-        if (ev.grade === 'perfect') this.lastHappyAt = t;
+        if (pf) this.lastHappyAt = t;
         if (tile.bpmChange && !s.demo) {
-          this.popups.push({ x, y: y - 74, text: '속도 UP!', color: s.level.theme.accent, life: 0, max: 1.1 });
+          this.popups.push({ x, y: y - 84, text: tile.bpmChange > 0 ? '빨라진다냥!' : '느려진다냥', color: s.level.theme.accent, life: 0, max: 1.2 });
         }
       } else if (ev.type === 'miss') {
-        this.popups.push({ x, y: y - 40, text: GRADE_INFO.miss.label, color: GRADE_INFO.miss.color, life: 0, max: 0.8 });
+        this.popups.push({ x, y: y - 46, text: GRADE_INFO.miss.label, color: GRADE_INFO.miss.color, life: 0, max: 0.8 });
         this.spawnBurst(x, y, '#c9c2d4', 5, 'dot');
-        this.cam.shake = 7;
+        this.cam.shake = 8;
         this.lastMissAt = t;
       } else if (ev.type === 'early') {
-        this.popups.push({ x, y: y - 30, text: '앗, 너무 빨라!', color: '#b9a8c9', life: 0, max: 0.5, small: true });
+        this.popups.push({ x, y: y - 34, text: '앗, 너무 빨라!', color: '#b48ac9', life: 0, max: 0.55, small: true });
       }
     }
   }
@@ -361,8 +476,10 @@ class Renderer {
     const ctx = this.ctx;
     const th = s.level.theme;
     const t = s.t();
-    const beat = s.beatInfo(t);
-    const pulse = beat.index >= 0 ? Math.exp(-beat.phase * 5) : 0;
+    const beat = s.chart.beatAt(t);
+    const bi = Math.floor(beat);
+    const phase = beat - bi;
+    const pulse = s.started && beat >= 0 && !s.ended ? Math.exp(-phase * 5) : 0;
 
     this.consumeEvents(t);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -378,158 +495,175 @@ class Renderer {
       b.y -= b.sp * dt;
       if (b.y < -0.1) { b.y = 1.1; b.x = Math.random(); }
       const px = ((b.x * this.w - this.cam.x * b.depth * 0.25) % this.w + this.w) % this.w;
-      const py = b.y * this.h;
-      const col = th.bokeh[b.ci % th.bokeh.length];
+      const py = ((b.y * this.h - this.cam.y * b.depth * 0.25) % this.h + this.h) % this.h;
       if (th.night && b.ci % 3 === 0) {
         const tw = 0.5 + 0.5 * Math.sin(this.time * 2 + b.tw);
         ctx.globalAlpha = 0.4 + 0.6 * tw;
         ctx.fillStyle = '#fff6d8';
         ctx.beginPath(); ctx.arc(px, py, 1.6 + b.depth * 1.4, 0, Math.PI * 2); ctx.fill();
       } else {
-        ctx.globalAlpha = (th.night ? 0.18 : 0.38) * b.depth;
-        ctx.fillStyle = col;
-        ctx.beginPath(); ctx.arc(px, py, b.r * (1 + pulse * 0.12 * b.depth), 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = (th.night ? 0.2 : 0.38) * b.depth;
+        ctx.fillStyle = th.bokeh[b.ci % th.bokeh.length];
+        ctx.beginPath(); ctx.arc(px, py, b.r * (1 + pulse * 0.15 * b.depth), 0, Math.PI * 2); ctx.fill();
       }
     }
     ctx.globalAlpha = 1;
     if (th.night) {
-      // 달
-      const mx = this.w * 0.82, my = this.h * 0.18;
-      ctx.fillStyle = 'rgba(255,240,200,0.12)';
-      ctx.beginPath(); ctx.arc(mx, my, 70 + pulse * 6, 0, Math.PI * 2); ctx.fill();
+      const mx = this.w * 0.84, my = this.h * 0.17;
+      ctx.fillStyle = 'rgba(255,240,200,0.10)';
+      ctx.beginPath(); ctx.arc(mx, my, 66 + pulse * 8, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff1c4';
-      ctx.beginPath(); ctx.arc(mx, my, 38, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(mx, my, 36, 0, Math.PI * 2); ctx.fill();
     }
 
     /* ---------- 카메라 ---------- */
-    const pose = this.catPose(t);
+    const cat = this.catState(t);
     const tiles = s.chart.tiles;
-    const ahead = tiles[Math.min(pose.k + 1, tiles.length - 1)];
-    const tx = lerp(pose.x, ahead.x * GAP, 0.35);
-    const ty = lerp(pose.y, ahead.y * GAP, 0.35);
-    const f = 1 - Math.exp(-dt * 4.5);
+    let ax = 0, ay = 0, an = 0;
+    for (let i = cat.k; i <= Math.min(cat.k + 6, tiles.length - 1); i++) { ax += tiles[i].x * GAP; ay += tiles[i].y * GAP; an++; }
+    const tx = lerp(cat.P.x, ax / an, 0.6), ty = lerp(cat.P.y, ay / an, 0.6);
+    const f = 1 - Math.exp(-dt * 4);
     this.cam.x = lerp(this.cam.x, tx, f);
     this.cam.y = lerp(this.cam.y, ty, f);
-    this.cam.zoom = clamp(Math.min(this.w, this.h) / 600, 0.82, 1.6);
+    this.cam.zoom = clamp(Math.min(this.w, this.h) / 640, 0.75, 1.5);
     this.cam.shake *= Math.exp(-dt * 12);
     const shx = (Math.random() - 0.5) * this.cam.shake;
     const shy = (Math.random() - 0.5) * this.cam.shake;
 
     ctx.save();
-    ctx.translate(this.w / 2 + shx, this.h / 2 + shy + (s.demo ? this.h * 0.3 : 0));
-    const z = this.cam.zoom * (1 + pulse * 0.012);
+    ctx.translate(this.w / 2 + shx, this.h / 2 + shy + this.yShift);
+    const z = this.cam.zoom * (1 + pulse * 0.01);
     ctx.scale(z, z);
     ctx.translate(-this.cam.x, -this.cam.y);
 
     const judged = s.judged;
-    const viewR = (Math.max(this.w, this.h) / z) * 0.75;
-    const visible = (tl) => Math.abs(tl.x * GAP - this.cam.x) < viewR && Math.abs(tl.y * GAP - this.cam.y) < viewR;
-    const revealAlpha = (i) => clamp(1 - (i - (judged + 14)) / 6, 0, 1);
+    const viewR = (Math.max(this.w, this.h) / z) * 0.7;
+    const vis = (tl) => Math.abs(tl.x * GAP - this.cam.x) < viewR && Math.abs(tl.y * GAP - this.cam.y) < viewR;
+    const reveal = (i) => clamp(1 - (i - (judged + 30)) / 10, 0, 1);
 
-    /* ---------- 길 ---------- */
-    ctx.strokeStyle = th.line;
-    ctx.lineWidth = 6;
+    /* ---------- 길 (띠) ---------- */
+    ctx.strokeStyle = th.path;
+    ctx.lineWidth = 30;
     ctx.lineCap = 'round';
-    ctx.setLineDash([2, 14]);
+    ctx.lineJoin = 'round';
     for (let i = 0; i < tiles.length - 1; i++) {
       const a = tiles[i], b = tiles[i + 1];
-      const al = revealAlpha(i + 1);
-      if (al <= 0 || (!visible(a) && !visible(b))) continue;
-      ctx.globalAlpha = al * 0.9;
+      const al = reveal(i + 1);
+      if (al <= 0 || (!vis(a) && !vis(b))) continue;
+      ctx.globalAlpha = al;
       ctx.beginPath(); ctx.moveTo(a.x * GAP, a.y * GAP); ctx.lineTo(b.x * GAP, b.y * GAP); ctx.stroke();
     }
-    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
     /* ---------- 발판 ---------- */
     for (let i = 0; i < tiles.length; i++) {
       const tl = tiles[i];
-      const al = revealAlpha(i);
-      if (al <= 0 || !visible(tl)) continue;
+      const al = reveal(i);
+      if (al <= 0 || !vis(tl)) continue;
       const st = s.tileState[i];
       const x = tl.x * GAP, y = tl.y * GAP;
       let scale = 1;
       if (st && st.grade !== 'start') {
         const since = t - st.time;
-        if (since >= 0 && since < 0.3) scale = 1 + 0.18 * (1 - easeOutBack(since / 0.3));
+        if (since >= 0 && since < 0.3) scale = 1 + 0.2 * (1 - easeOutBack(since / 0.3));
       }
-      if (i === judged + 1) scale *= 1 + pulse * 0.06;
-      if (i === tiles.length - 1) scale *= 1.15;
+      if (i === judged + 1) scale *= 1 + pulse * 0.05;
+      const last = i === tiles.length - 1;
+      if (last) scale *= 1.2;
       const sz = TS * scale;
 
+      ctx.save();
       ctx.globalAlpha = al;
+      ctx.translate(x, y);
+      ctx.rotate((-tl.heading * Math.PI) / 180);
       ctx.fillStyle = th.tileShadow;
-      roundRect(ctx, x - sz / 2, y - sz / 2 + 6, sz, sz, 15);
+      roundRect(ctx, -sz / 2, -sz / 2 + 5, sz, sz, 13);
       ctx.fill();
       let fill = th.tile;
-      if (st && GRADE_INFO[st.grade]) fill = mixColor(th.tile, GRADE_INFO[st.grade].color, 0.35);
+      if (st && GRADE_INFO[st.grade]) fill = mixColor(th.tile, GRADE_INFO[st.grade].color, 0.38);
+      else if (i === judged + 1) fill = mixColor(th.tile, th.accent, 0.12 + pulse * 0.1);
       ctx.fillStyle = fill;
-      roundRect(ctx, x - sz / 2, y - sz / 2, sz, sz, 15);
+      roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 13);
       ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      roundRect(ctx, x - sz / 2 + 6, y - sz / 2 + 4, sz - 12, 7, 4);
-      ctx.fill();
+      ctx.restore();
 
+      ctx.save();
+      ctx.globalAlpha = al;
       if (st && GRADE_INFO[st.grade]) {
-        drawPaw(ctx, x, y + 2, 14 * scale, st.grade === 'miss' ? 'rgba(120,110,130,0.45)' : GRADE_INFO[st.grade].color);
-      } else if (i === tiles.length - 1) {
-        // 도착 칸: 생선 아이콘
+        drawPaw(ctx, x, y + 2, 13 * scale, st.grade === 'miss' ? 'rgba(120,110,130,0.45)' : GRADE_INFO[st.grade].color);
+      } else if (last) {
         drawFish(ctx, x, y + 1, th.accent);
-      } else if (i > 0) {
-        ctx.fillStyle = th.line;
-        ctx.globalAlpha = al * 0.55;
-        ctx.beginPath(); ctx.arc(x, y + 1, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = al;
       }
-
-      // 박자 길이 표시
-      if (i > 0 && tl.beats !== 1 && !st) {
-        ctx.font = '700 13px Jua, sans-serif';
+      // 빙글 발판: 회전 방향이 바뀜
+      if (tl.twirl) drawSpiral(ctx, x, y, 12, th.accent, tl.rot);
+      // 추가 회전 수
+      if (tl.loops > 0 && !st) {
+        ctx.font = '15px Jua, sans-serif';
         ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = th.tile;
+        const label = `+${tl.loops}바퀴`;
+        ctx.strokeText(label, x, y - sz / 2 - 6);
         ctx.fillStyle = th.accent;
-        ctx.fillText(tl.beats === 0.5 ? '½' : '×' + tl.beats, x + sz / 2 - 2, y - sz / 2 + 2);
+        ctx.fillText(label, x, y - sz / 2 - 6);
       }
       if (tl.bpmChange && !st) {
-        ctx.font = '700 15px Jua, sans-serif';
+        ctx.font = '18px Jua, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = th.accent;
-        ctx.fillText('»', x - sz / 2 + 4, y - sz / 2 + 4);
+        ctx.fillStyle = tl.bpmChange > 0 ? '#ff4f6d' : '#4f8bff';
+        ctx.fillText(tl.bpmChange > 0 ? '»»' : '««', x, y + 6);
       }
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
 
-    /* ---------- 다가오는 박자 링 ---------- */
-    for (let i = judged + 1; i <= Math.min(judged + 4, tiles.length - 1); i++) {
-      const tl = tiles[i];
-      const ad = Math.max(tl.stepDur, 60 / tl.bpm);
-      const remain = tl.time - t;
-      if (remain > ad || remain < -JUDGE.good) continue;
-      const p = clamp(remain / ad, 0, 1);
-      const r = lerp(TS * 0.58, TS * 1.7, p);
-      ctx.globalAlpha = (1 - p) * (i === judged + 1 ? 0.95 : 0.4);
+    /* ---------- 회전 궤도 가이드 ---------- */
+    if (cat.L > 0.5 && !s.ended) {
+      ctx.save();
+      ctx.globalAlpha = 0.16;
       ctx.strokeStyle = th.accent;
-      ctx.lineWidth = 3.5;
-      roundRect(ctx, tl.x * GAP - r, tl.y * GAP - r, r * 2, r * 2, r * 0.45);
-      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 9]);
+      ctx.beginPath(); ctx.arc(cat.P.x, cat.P.y, GAP, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 잔상 꼬리
+      const span = 0.9;
+      for (let i = 0; i < 10; i++) {
+        const a0 = cat.phi - cat.rot * span * (i / 10);
+        const a1 = cat.phi - cat.rot * span * ((i + 1) / 10);
+        ctx.globalAlpha = 0.28 * (1 - i / 10);
+        ctx.lineWidth = 9 * (1 - i / 12);
+        ctx.beginPath();
+        ctx.arc(cat.P.x, cat.P.y, GAP * cat.L, -a0, -a1, cat.rot < 0);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
 
-    /* ---------- 파티클 (발판 위) ---------- */
+    /* ---------- 파티클 ---------- */
     this.drawParticles(ctx, dt);
 
     /* ---------- 고양이 ---------- */
     let mood = 'normal';
-    if (t - this.lastMissAt < 0.6) mood = 'dizzy';
-    else if (pose.air || t - this.lastHappyAt < 0.25) mood = 'happy';
-    else if ((this.time % 3.2) < 0.13) mood = 'blink';
+    if (t - this.lastMissAt < 0.6 || (s.ended && s.result && !s.result.cleared)) mood = 'dizzy';
+    else if (t - this.lastHappyAt < 0.22) mood = 'happy';
+    else if ((this.time % 3.1) < 0.12) mood = 'blink';
     if (s.ended && s.result && s.result.cleared) mood = 'happy';
-    ctx.save();
-    ctx.translate(pose.x, pose.y + 12);
-    const bob = pose.air ? 1 : 1 - pulse * 0.05;
-    drawCat(ctx, this.skin, {
-      face: this.face, sx: pose.sx, sy: pose.sy * bob, lift: pose.lift, t: this.time, mood,
-    });
-    ctx.restore();
+
+    if (cat.L < 0.3) {
+      ctx.save();
+      ctx.translate(cat.P.x, cat.P.y + 14);
+      drawCat(ctx, this.skin, { face: this.face, t: this.time, mood, sy: 1 - pulse * 0.05 });
+      ctx.restore();
+    } else {
+      const H = cat.pivotIsHead ? cat.P : cat.S;
+      const B = cat.pivotIsHead ? cat.S : cat.P;
+      if (Math.abs(H.x - B.x) > 6) this.face = Math.sign(H.x - B.x);
+      drawStretchCat(ctx, this.skin, {
+        B, H, t: this.time, mood, face: this.face,
+        bend: cat.rot * 9 * (cat.pivotIsHead ? -1 : 1) * cat.L,
+        swingIsHead: !cat.pivotIsHead,
+      });
+    }
 
     /* ---------- 판정 텍스트 ---------- */
     ctx.textAlign = 'center';
@@ -543,7 +677,7 @@ class Renderer {
       ctx.translate(p.x, p.y - k * 22);
       ctx.scale(sc, sc);
       ctx.globalAlpha = 1 - Math.pow(k, 3);
-      ctx.font = `${p.small ? 15 : 24}px Jua, sans-serif`;
+      ctx.font = `${p.small ? 15 : 22}px Jua, sans-serif`;
       ctx.lineWidth = 5;
       ctx.strokeStyle = 'rgba(255,255,255,0.95)';
       ctx.strokeText(p.text, 0, 0);
@@ -552,22 +686,22 @@ class Renderer {
       if (p.sub) {
         ctx.font = '13px Jua, sans-serif';
         ctx.lineWidth = 4;
-        ctx.strokeText(p.sub, 0, 17);
+        ctx.strokeText(p.sub, 0, 16);
         ctx.fillStyle = '#9a8aa6';
-        ctx.fillText(p.sub, 0, 17);
+        ctx.fillText(p.sub, 0, 16);
       }
       ctx.restore();
     }
     ctx.restore();
 
     /* ---------- 카운트다운 ---------- */
-    if (!s.demo && s.started && beat.index >= -3 && beat.index <= 0 && t < 0.6) {
-      const label = beat.index === 0 ? '냥!' : String(-beat.index);
-      const sc = 1 + 0.5 * Math.exp(-beat.phase * 7);
+    if (!s.demo && s.started && beat >= -3 && beat < 0.7) {
+      const label = bi >= 0 ? '냥!' : String(-bi);
+      const sc = 1 + 0.5 * Math.exp(-phase * 7);
       ctx.save();
-      ctx.translate(this.w / 2, this.h * 0.3);
+      ctx.translate(this.w / 2, this.h * 0.26);
       ctx.scale(sc, sc);
-      ctx.globalAlpha = 1 - beat.phase * 0.6;
+      ctx.globalAlpha = 1 - phase * 0.6;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = '72px Jua, sans-serif';
@@ -611,27 +745,4 @@ class Renderer {
     }
     ctx.globalAlpha = 1;
   }
-}
-
-function drawFish(ctx, x, y, color) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.ellipse(-2, 0, 11, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(7, 0); ctx.lineTo(15, -7); ctx.lineTo(15, 7); ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.arc(-7, -1.5, 1.8, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
-
-function mixColor(a, b, k) {
-  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
-  const r = Math.round(lerp((pa >> 16) & 255, (pb >> 16) & 255, k));
-  const g = Math.round(lerp((pa >> 8) & 255, (pb >> 8) & 255, k));
-  const bl = Math.round(lerp(pa & 255, pb & 255, k));
-  return `rgb(${r},${g},${bl})`;
 }

@@ -28,14 +28,35 @@
       <div class="logo">
         <span class="logo-paw">🐾</span>
         <h1>꾹꾹 스텝</h1>
-        <p class="logo-sub">Paw Paw Step · 고양이 리듬 산책</p>
+        <p class="logo-sub">Paw Paw Step · 쭈욱 늘어나는 고양이 리듬게임</p>
       </div>
       <div class="menu">
         <button class="btn primary" data-go="select">시작하기</button>
-        <button class="btn" data-go="settings">설정</button>
+        <button class="btn" data-go="howto">플레이 방법</button>
+        <button class="btn ghost" data-go="settings">설정</button>
       </div>
-      <p class="hint">고양이가 발판에 <b>착지하는 순간</b> 꾹! 눌러주세요<br/>
-        <kbd>Space</kbd> · 아무 키 · 화면 터치</p>
+    </div>
+  </section>
+
+  <!-- 플레이 방법 -->
+  <section id="screen-howto" class="screen">
+    <div class="panel">
+      <h2>플레이 방법</h2>
+      <ol class="howto">
+        <li>고양이 한쪽 끝은 발판을 꾹 밟고, 몸을 <b>쭈욱 늘려</b> 다른 쪽 끝을 빙글빙글 돌려요.</li>
+        <li>도는 끝이 <b>다음 발판에 닿는 순간</b> 아무 키나 화면을 꾹!<br/>그러면 앞발 ↔ 엉덩이가 번갈아 발판을 밟아요.</li>
+        <li>도는 속도는 항상 일정해요. 그래서 <b>길이 꺾인 각도가 곧 박자</b>예요.</li>
+      </ol>
+      <div class="angle-table">
+        <div><span class="ang">━━</span>직진<b>1박</b></div>
+        <div><span class="ang">┓</span>안쪽 직각<b>½박</b></div>
+        <div><span class="ang">┏</span>바깥쪽 직각<b>1½박</b></div>
+        <div><span class="ang">∠</span>뾰족 135°<b>¼박</b></div>
+        <div><span class="ang">🌀</span>빙글 발판<b>회전 반대</b></div>
+        <div><span class="ang">+1</span>바퀴 발판<b>한 바퀴 더</b></div>
+      </div>
+      <p class="tip">앞에 놓인 길 모양을 보면 다가올 리듬을 미리 읽을 수 있어요!</p>
+      <button class="btn small ghost" data-go="title">← 돌아가기</button>
     </div>
   </section>
 
@@ -48,7 +69,11 @@
         <div id="skins"></div>
       </div>
       <div id="levels" class="level-grid"></div>
-      <button class="btn small ghost" data-go="title">← 돌아가기</button>
+      <div id="detail" class="detail"></div>
+      <div class="menu row">
+        <button class="btn ghost" data-go="title">← 뒤로</button>
+        <button class="btn primary" id="btn-play">플레이 ▶</button>
+      </div>
     </div>
   </section>
 
@@ -57,13 +82,17 @@
     <div class="panel">
       <h2>설정</h2>
       <label class="field">
-        <span>볼륨 <em id="vol-val"></em></span>
-        <input id="opt-volume" type="range" min="0" max="100" step="1" />
+        <span>음악 볼륨 <em id="mvol-val"></em></span>
+        <input id="opt-mvol" type="range" min="0" max="100" step="1" />
+      </label>
+      <label class="field">
+        <span>효과음 볼륨 <em id="svol-val"></em></span>
+        <input id="opt-svol" type="range" min="0" max="100" step="1" />
       </label>
       <label class="field">
         <span>싱크 보정 <em id="off-val"></em></span>
         <input id="opt-offset" type="range" min="-200" max="200" step="5" />
-        <small>판정이 자꾸 "느려요"라면 +, "빨라요"라면 − 쪽으로</small>
+        <small>판정이 자꾸 "느려요"라면 + 쪽으로, "빨라요"라면 − 쪽으로</small>
       </label>
       <label class="field row">
         <span>구경 모드 (자동 플레이)</span>
@@ -91,7 +120,7 @@
       <p id="res-title" class="res-title"></p>
       <div id="res-rank" class="rank">S</div>
       <div id="res-badges" class="badges"></div>
-      <div class="res-acc"><span id="res-acc">100%</span><small>정확도</small></div>
+      <div class="res-acc"><span id="res-acc">100%</span><small id="res-acc-label">정확도</small></div>
       <ul class="res-counts">
         <li class="c-perfect"><b id="res-perfect">0</b><span>Purrfect</span></li>
         <li class="c-great"><b id="res-great">0</b><span>Nice</span></li>
@@ -106,6 +135,7 @@
     </div>
   </section>
 
+  <script src="js/songs.js"></script>
   <script src="js/levels.js"></script>
   <script src="js/chart.js"></script>
   <script src="js/audio.js"></script>
